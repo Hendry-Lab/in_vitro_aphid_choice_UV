@@ -38,28 +38,83 @@ aphid_choice_raw <- read_excel("data/alate_choice_in_vitro.xlsx") %>%
    mutate(block = as.factor(block))
 ```
 
-## Filter per block
+## Summarize aphid counts
 
-```{r filter-choice}
-#block 1
-aphid_choice_raw_block1 <- aphid_choice_raw %>%
-  filter(block == "1")
+```{r aphid sums}
+aphid_choice_sum <- aphid_choice_raw %>%
+  group_by(block, treatment, box, UV) %>%
+  summarize(
+    total_alates_4_hrs = sum(alates_4_hrs),
+    total_nymphs_4_hrs = sum(nymphs_4_hrs),
+    total_alates_24_hrs = sum(alates_24_hrs),
+    total_nymphs_24_hrs = sum(nymphs_24_hrs),
+    .groups = "drop"
+  )
 
-#block 2
-aphid_choice_raw_block2 <- aphid_choice_raw %>%
-  filter(block == "2")
-
-#block 3
-aphid_choice_raw_block3 <- aphid_choice_raw %>%
-  filter(block == "3")
-
-#block 4
-aphid_choice_raw_block4 <- aphid_choice_raw %>%
-  filter(block == "4")
+# reshape
+aphid_choice_sum <- aphid_choice_sum %>%
+  filter(treatment %in% c("220_supernatant", "PPM")) %>%   # Keep only relevant treatments
+  pivot_wider(
+    names_from = treatment, 
+    values_from = c(total_alates_4_hrs, total_nymphs_4_hrs, total_alates_24_hrs, total_nymphs_24_hrs),
+    names_glue = "{.value}_{treatment}"
+  ) %>%
+  select(block, box, UV, 
+         alates_220_supernatant_4_hrs = total_alates_4_hrs_220_supernatant,
+         alates_PPM_4_hrs = total_alates_4_hrs_PPM,
+         nymphs_220_supernatant_4_hrs = total_nymphs_4_hrs_220_supernatant,
+         nymphs_PPM_4_hrs = total_nymphs_4_hrs_PPM,
+         alates_220_supernatant_24_hrs = total_alates_24_hrs_220_supernatant,
+         alates_PPM_24_hrs = total_alates_24_hrs_PPM,
+         nymphs_220_supernatant_24_hrs = total_nymphs_24_hrs_220_supernatant,
+         nymphs_PPM_24_hrs = total_nymphs_24_hrs_PPM)
 ```
 
-## Sum wells with the same treatment per box
+## Calculate percent aphid counts and deviations from 50%
+```{r calc-percents}
+# separate by box
+# calculate percents
+aphid_choice_percent_box <- aphid_choice_sum %>%
+  group_by(block, box, UV) %>%
+  summarize(
+    percent_choice_4hrs = (100 * (alates_220_supernatant_4_hrs / (alates_220_supernatant_4_hrs + alates_PPM_4_hrs))))
 
-```{r sum_treatment}
+# Summarize the data by block and UV, calculating average deviation from 50%
+aphid_choice_deviation_box <- aphid_choice_percent_box %>%
+  group_by(block, box, UV) %>%
+  summarize(
+    average_deviation_50percent_choice_4hrs = abs(50 - percent_choice_4hrs))
+```
 
+# Plots
+
+## 4 Hour Alate Choice
+
+```{r 4hour_alate_choice}
+# remove block 1
+aphid_choice_sum_no_block1 <- aphid_choice_sum %>%
+  filter(block != "1")
+
+# plot 4 hour alate choice
+ggplot(aphid_choice_sum_no_block1, aes(x = box, y = 100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)), fill = UV)) +
+  geom_col(width = 0.5) +
+  facet_grid(~block) +
+  labs(x = "Box", y = "Percent Alates Choosing #220 Supernatant", title = "4 Hours Alate Choice") +
+  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
+
+# plot 4 hour alate choice - deviation from 50%
+ggplot(aphid_choice_sum_no_block1, aes(x = box, y = abs(50- (100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)))), fill = UV)) +
+  geom_col(width = 0.5) +
+  facet_grid(~block) +
+  labs(x = "Box", y = "Deviation from 50%", title = "4 Hours Alate #220 Treatment Choice", subtitle = "Absolute Deviation from 50%") +
+  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
+
+# plot block level 4 hour alate choice - deviation from 50%
+ggplot(aphid_choice_sum_no_block1, aes(x = block, y = abs(50- (100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)))), fill = UV)) +
+  geom_col(position = "dodge", width = 0.5) +
+  labs(x = "Box", y = "Deviation from 50%", title = "4 Hours Alate #220 Treatment Choice", subtitle = "Absolute Deviation from 50%") +
+  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
 ```
