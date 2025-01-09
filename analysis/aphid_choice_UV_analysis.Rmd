@@ -52,14 +52,13 @@ aphid_choice_sum <- aphid_choice_raw %>%
   )
 
 # reshape
+
 aphid_choice_sum <- aphid_choice_sum %>%
-  filter(treatment %in% c("220_supernatant", "PPM")) %>%   # Keep only relevant treatments
   pivot_wider(
     names_from = treatment, 
     values_from = c(total_alates_4_hrs, total_nymphs_4_hrs, total_alates_24_hrs, total_nymphs_24_hrs),
-    names_glue = "{.value}_{treatment}"
-  ) %>%
-  select(block, box, UV, 
+    names_glue = "{.value}_{treatment}") %>%
+  select(block, box, UV,
          alates_220_supernatant_4_hrs = total_alates_4_hrs_220_supernatant,
          alates_PPM_4_hrs = total_alates_4_hrs_PPM,
          nymphs_220_supernatant_4_hrs = total_nymphs_4_hrs_220_supernatant,
@@ -67,7 +66,9 @@ aphid_choice_sum <- aphid_choice_sum %>%
          alates_220_supernatant_24_hrs = total_alates_24_hrs_220_supernatant,
          alates_PPM_24_hrs = total_alates_24_hrs_PPM,
          nymphs_220_supernatant_24_hrs = total_nymphs_24_hrs_220_supernatant,
-         nymphs_PPM_24_hrs = total_nymphs_24_hrs_PPM)
+         nymphs_PPM_24_hrs = total_nymphs_24_hrs_PPM) %>%
+  mutate(sum_alates_4_hrs = alates_220_supernatant_4_hrs + alates_PPM_4_hrs, sum_nymphs_4_hrs = nymphs_220_supernatant_4_hrs + nymphs_PPM_4_hrs, sum_alates_24_hrs = alates_220_supernatant_24_hrs + alates_PPM_24_hrs, sum_nymphs_24_hrs = nymphs_220_supernatant_24_hrs + nymphs_PPM_24_hrs, total_alates_10_or_more = ifelse(sum_alates_4_hrs >= 10, "yes", "no")) %>%
+  filter(sum_alates_4_hrs >= 5)
 ```
 
 ## Calculate percent aphid counts and deviations from 50%
@@ -75,15 +76,16 @@ aphid_choice_sum <- aphid_choice_sum %>%
 # separate by box
 # calculate percents
 aphid_choice_percent_box <- aphid_choice_sum %>%
-  group_by(block, box, UV) %>%
+  group_by(block, box, UV, total_alates_10_or_more) %>%
   summarize(
-    percent_choice_4hrs = (100 * (alates_220_supernatant_4_hrs / (alates_220_supernatant_4_hrs + alates_PPM_4_hrs))))
-
-# Summarize the data by block and UV, calculating average deviation from 50%
-aphid_choice_deviation_box <- aphid_choice_percent_box %>%
-  group_by(block, box, UV) %>%
-  summarize(
-    average_deviation_50percent_choice_4hrs = abs(50 - percent_choice_4hrs))
+    percent_choice_4hrs = (100 * (alates_220_supernatant_4_hrs/sum_alates_4_hrs)),
+    percent_choice_24hrs = (100 * (alates_220_supernatant_24_hrs/sum_alates_24_hrs)),
+    percent_nymphs_4hrs = (100 * (nymphs_220_supernatant_4_hrs/sum_nymphs_4_hrs)),
+    percent_nymphs_24hrs = (100 * (nymphs_220_supernatant_24_hrs/sum_nymphs_24_hrs)),
+    ) %>%
+  mutate(
+    percent_diff_from_50_4hrs = percent_choice_4hrs - 50, percent_diff_from_50_24hrs = percent_choice_24hrs - 50  # Calculate the difference from 50%
+  )
 ```
 
 # Plots
@@ -92,29 +94,46 @@ aphid_choice_deviation_box <- aphid_choice_percent_box %>%
 
 ```{r 4hour_alate_choice}
 # remove block 1
-aphid_choice_sum_no_block1 <- aphid_choice_sum %>%
+aphid_choice_percent_box_no_block1 <- aphid_choice_percent_box %>%
   filter(block != "1")
 
-# plot 4 hour alate choice
-ggplot(aphid_choice_sum_no_block1, aes(x = box, y = 100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)), fill = UV)) +
-  geom_col(width = 0.5) +
-  facet_grid(~block) +
-  labs(x = "Box", y = "Percent Alates Choosing #220 Supernatant", title = "4 Hours Alate Choice") +
-  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
-  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
+#plot it!
+ggplot(aphid_choice_percent_box_no_block1, aes(x = block, y = percent_diff_from_50_4hrs, fill = UV, group = interaction(box, UV))) +
+  geom_col(position = position_dodge(width = 1), color = "black", size = 0.3) +  # Dodge bars by both box and UV
+  scale_y_continuous(limits = c(-50, 50),  # Set y-axis from -50% to +50% (around 50%)
+                     breaks = seq(-50, 50, 10),  # Customize y-axis breaks
+                     labels = c("0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100")) +  # Custom labels
+  coord_flip() +  # Flip coordinates so the bars are horizontal
+  theme_minimal() +  # Use minimal theme
+  labs(x = "Block", 
+       y = "% of Alates Choosing #220", 
+       title = "Aphid Preference for #220 Supernatant at 4 Hours") +
+  geom_hline(yintercept = 0, color = "white", alpha = 0) +  # Add a horizontal line at 50%
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis text for better readability
+        legend.position = "bottom") + # Place legend at the bottom
+  # Add dotted lines between different block groups
+  geom_vline(xintercept = seq(1.5, length(unique(aphid_choice_percent_box_no_block1$block)) - 0.5, by = 1), 
+             linetype = "dotted", color = "grey", size = 0.5)  # Dotted lines between blocks
+```
 
-# plot 4 hour alate choice - deviation from 50%
-ggplot(aphid_choice_sum_no_block1, aes(x = box, y = abs(50- (100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)))), fill = UV)) +
-  geom_col(width = 0.5) +
-  facet_grid(~block) +
-  labs(x = "Box", y = "Deviation from 50%", title = "4 Hours Alate #220 Treatment Choice", subtitle = "Absolute Deviation from 50%") +
-  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
-  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
+## 24 Hour Alate Choice
 
-# plot block level 4 hour alate choice - deviation from 50%
-ggplot(aphid_choice_sum_no_block1, aes(x = block, y = abs(50- (100*(alates_220_supernatant_4_hrs/(alates_220_supernatant_4_hrs+alates_PPM_4_hrs)))), fill = UV)) +
-  geom_col(position = "dodge", width = 0.5) +
-  labs(x = "Box", y = "Deviation from 50%", title = "4 Hours Alate #220 Treatment Choice", subtitle = "Absolute Deviation from 50%") +
-  theme(panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "gray90"), panel.grid.major.x = element_blank(),
-  panel.grid.minor.x = element_blank(), axis.text.x = element_blank()) # Removes x-axis labels
+```{r 24hour_alate_choice}
+#plot it!
+ggplot(aphid_choice_percent_box, aes(x = block, y = percent_diff_from_50_24hrs, fill = UV, group = interaction(box, UV))) +
+  geom_col(position = position_dodge(width = 1), color = "black", size = 0.3) +  # Dodge bars by both box and UV
+  scale_y_continuous(limits = c(-50, 50),  # Set y-axis from -50% to +50% (around 50%)
+                     breaks = seq(-50, 50, 10),  # Customize y-axis breaks
+                     labels = c("0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100")) +  # Custom labels
+  coord_flip() +  # Flip coordinates so the bars are horizontal
+  theme_minimal() +  # Use minimal theme
+  labs(x = "Block", 
+       y = "% of Alates Choosing #220", 
+       title = "Aphid Preference for #220 Supernatant at 24 Hours") +
+  geom_hline(yintercept = 0, color = "white", alpha = 0) +  # Add a horizontal line at 50%
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis text for better readability
+        legend.position = "bottom") + # Place legend at the bottom
+  # Add dotted lines between different block groups
+  geom_vline(xintercept = seq(1.5, length(unique(aphid_choice_percent_box_no_block1$block)) - 0.5, by = 1), 
+             linetype = "dotted", color = "grey", size = 0.5)  # Dotted lines between blocks
 ```
