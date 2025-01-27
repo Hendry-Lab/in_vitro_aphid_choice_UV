@@ -94,6 +94,14 @@ aphid_choice_mean <- aphid_choice_percent_plate %>%
   ungroup()
 ```
 
+#check katie's analysis
+
+```{r check-katie}
+aphid_choice_percent_plate_no_block1_UV <- aphid_choice_percent_plate_no_block1 %>% filter(UV == "yes")
+
+aphid_choice_sum_UV <- aphid_choice_sum %>% filter(UV == "yes")
+```
+
 # Plots
 
 ## 4 Hour Alate Choice
