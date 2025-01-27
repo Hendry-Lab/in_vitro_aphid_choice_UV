@@ -67,7 +67,9 @@ aphid_choice_sum <- aphid_choice_sum %>%
          alates_supernatant_24_hrs = total_alates_24_hrs_supernatant, 
          nymphs_PPM_24_hrs = total_nymphs_24_hrs_PPM, 
          nymphs_supernatant_24_hrs = total_nymphs_24_hrs_supernatant) %>%
-  mutate(sum_alates_4_hrs = alates_supernatant_4_hrs + alates_PPM_4_hrs, sum_nymphs_4_hrs = nymphs_supernatant_4_hrs + nymphs_PPM_4_hrs, sum_alates_24_hrs = alates_supernatant_24_hrs + alates_PPM_24_hrs, sum_nymphs_24_hrs = nymphs_supernatant_24_hrs + nymphs_PPM_24_hrs, total_alates_10_or_more = ifelse(sum_alates_4_hrs >= 10, "yes", "no")) %>%
+  mutate(sum_alates_4_hrs = alates_supernatant_4_hrs + alates_PPM_4_hrs, sum_nymphs_4_hrs = nymphs_supernatant_4_hrs + nymphs_PPM_4_hrs, sum_alates_24_hrs = alates_supernatant_24_hrs + alates_PPM_24_hrs, sum_nymphs_24_hrs = nymphs_supernatant_24_hrs + nymphs_PPM_24_hrs, total_alates4hr_5_or_more = ifelse(sum_alates_4_hrs >= 5, "yes", "no"))
+
+aphid_choice_sum_5plus <- aphid_choice_sum %>%
   filter(sum_alates_4_hrs >= 5)
 ```
 
@@ -75,7 +77,7 @@ aphid_choice_sum <- aphid_choice_sum %>%
 ```{r calc-percents}
 # separate by plate
 # calculate percents
-aphid_choice_percent_plate <- aphid_choice_sum %>%
+aphid_choice_percent_plate <- aphid_choice_sum_5plus %>%
   group_by(block, plate, UV, strain, total_alates_10_or_more) %>%
   summarize(
     percent_choice_4hrs = (100 * (alates_supernatant_4_hrs/sum_alates_4_hrs)),
